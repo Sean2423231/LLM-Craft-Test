@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Block Building Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #renderDistanceContainer {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 3px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            pointer-events: auto;
+            z-index: 100;
+        }
+        #renderDistanceContainer label {
+            pointer-events: auto;
+            cursor: pointer;
+            user-select: none;
+        }
+        #renderDistanceSlider {
+            margin-left: 10px;
+            width: 150px;
+            vertical-align: middle;
+            pointer-events: auto;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    <script src="renderer.js"></script>
+    <script src="world.js"></script>
+    <script src="blocks.js"></script>
+    <script src="player.js"></script>
+    <script src="inventory.js"></script>
+    <script src="llm.js"></script>
+    <script src="ui.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
