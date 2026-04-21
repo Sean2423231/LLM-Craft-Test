@@ -73,23 +73,50 @@ let selectedSlot2 = null;
 let selectedSlot1Index = null;
 let selectedSlot2Index = null;
 
-const slot1Container = document.createElement('div');
-const slot1Display = createBlockSlotDisplay(null);
-slot1Container.appendChild(slot1Display.container);
-slot1Container.style.display = 'inline-block';
-slot1Container.style.marginRight = '10px';
-slot1Container.style.position = 'relative';
+let slot1Container = null;
+let slot1Display = null;
+let slot2Container = null;
+let slot2Display = null;
 
-const slot2Container = document.createElement('div');
-const slot2Display = createBlockSlotDisplay(null);
-slot2Container.appendChild(slot2Display.container);
-slot2Container.style.display = 'inline-block';
-slot2Container.style.marginLeft = '10px';
-slot2Container.style.position = 'relative';
+function initCraftingSlots() {
+    // Remove old slots if they exist
+    if (slot1Container) slot1Container.remove();
+    if (slot2Container) slot2Container.remove();
+    
+    // Reset selections
+    selectedSlot1 = null;
+    selectedSlot2 = null;
+    selectedSlot1Index = null;
+    selectedSlot2Index = null;
+    
+    // Create new slots with fresh event listeners
+    slot1Container = document.createElement('div');
+    slot1Display = createBlockSlotDisplay(null);
+    slot1Container.appendChild(slot1Display.container);
+    slot1Container.style.display = 'inline-block';
+    slot1Container.style.marginRight = '10px';
+    slot1Container.style.position = 'relative';
 
-craftingOverlay.appendChild(slot1Container);
-craftingOverlay.appendChild(document.createTextNode(' + '));
-craftingOverlay.appendChild(slot2Container);
+    slot2Container = document.createElement('div');
+    slot2Display = createBlockSlotDisplay(null);
+    slot2Container.appendChild(slot2Display.container);
+    slot2Container.style.display = 'inline-block';
+    slot2Container.style.marginLeft = '10px';
+    slot2Container.style.position = 'relative';
+    
+    // Add back to overlay
+    const titleDiv = craftingOverlay.querySelector('div:first-child');
+    if (titleDiv) {
+        craftingOverlay.insertBefore(slot1Container, titleDiv.nextSibling);
+        const plusSpan = document.createElement('span');
+        plusSpan.textContent = ' + ';
+        craftingOverlay.insertBefore(plusSpan, slot1Container.nextSibling);
+        craftingOverlay.insertBefore(slot2Container, plusSpan.nextSibling);
+    }
+}
+
+// Initialize on first load
+initCraftingSlots();
 
 function resetCraftingSlot(display) {
     display.label.innerText = 'Empty';
@@ -115,14 +142,12 @@ function setCraftingSlot(slotNumber, blockType, slotIndex) {
         display.label.style.color = '#ccc';
         display.colorBox.style.backgroundColor = metadata ? metadata.color : '#CCCCCC';
         
-        // Add modifier tooltip
-        let tooltip = container.querySelector('[data-is-modifier-tooltip]');
-        if (tooltip) {
-            tooltip.remove();
-        }
+        // Add modifier tooltip - clean up any existing tooltips first
+        cleanupModifierTooltips();
 
         tooltip = document.createElement('div');
         tooltip.setAttribute('data-is-modifier-tooltip', 'true');
+        tooltip.setAttribute('data-slot-number', String(slotNumber));
         tooltip.style.position = 'fixed';
         tooltip.style.display = 'none';
         tooltip.style.zIndex = '9999';
@@ -138,7 +163,7 @@ function setCraftingSlot(slotNumber, blockType, slotIndex) {
         tooltip.style.pointerEvents = 'none';
         tooltip.style.boxShadow = '0 0 15px rgba(0, 255, 0, 0.3)';
         tooltip.innerHTML = `<strong>${blockType}</strong><br><em>Loading modifiers...</em>`;
-        document.body.appendChild(tooltip);
+        document.body.appendChild(tooltip)
 
         // Get and display modifiers
         const loadModifiers = async () => {
@@ -182,11 +207,8 @@ function setCraftingSlot(slotNumber, blockType, slotIndex) {
         if (slotNumber === 1) selectedSlot1Index = null;
         if (slotNumber === 2) selectedSlot2Index = null;
         
-        // Remove tooltip if it exists
-        const tooltip = container.querySelector('[data-is-modifier-tooltip]');
-        if (tooltip) {
-            tooltip.remove();
-        }
+        // Remove all tooltips
+        cleanupModifierTooltips();
         
         resetCraftingSlot(display);
     }
@@ -435,6 +457,12 @@ window.isAnyMenuOpen = () => {
     return isCraftingOpen() || inventoryOpen;
 };
 
+// Helper to clean up all modifier tooltips
+function cleanupModifierTooltips() {
+    const tooltips = document.querySelectorAll('[data-is-modifier-tooltip]');
+    tooltips.forEach(tooltip => tooltip.remove());
+}
+
 function syncInstructionPrompt() {
     if (typeof controls === 'undefined') return;
     if (controls.isLocked) {
@@ -447,6 +475,9 @@ function syncInstructionPrompt() {
 
 function setCraftingOpen(isOpen) {
     if (isOpen) {
+        // Clean up any old tooltips first
+        cleanupModifierTooltips();
+        
         craftingOverlay.style.display = 'block';
         if (typeof window.setInventoryOpen === 'function' && typeof window.isInventoryOpen === 'function' && window.isInventoryOpen()) {
             window.setInventoryOpen(false);
@@ -454,11 +485,16 @@ function setCraftingOpen(isOpen) {
         if (typeof controls !== 'undefined' && controls.isLocked) {
             controls.unlock();
         }
+        // Reinitialize slots to clear old event listeners
+        initCraftingSlots();
         renderCraftingInventoryGrid();
         syncInstructionPrompt();
         return;
     }
 
+    // Clean up tooltips when closing
+    cleanupModifierTooltips();
+    
     craftingOverlay.style.display = 'none';
     window.crafting_selectSlot = null;
     syncInstructionPrompt();
@@ -472,6 +508,7 @@ function setCraftingOpen(isOpen) {
 }
 
 window.setCraftingOpen = setCraftingOpen;
+window.cleanupModifierTooltips = cleanupModifierTooltips;
 
 document.body.appendChild(craftingOverlay);
 

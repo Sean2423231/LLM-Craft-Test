@@ -43,6 +43,10 @@ function setInventoryOpen(isOpen) {
             if (!menuOpen) {
                 controls.lock();
             }
+            // Clean up tooltips when inventory closes
+            if (typeof window.cleanupModifierTooltips === 'function') {
+                window.cleanupModifierTooltips();
+            }
         }
     }
 
