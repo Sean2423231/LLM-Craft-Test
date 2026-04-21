@@ -42,6 +42,9 @@ const BLOCK_METADATA = {
     // Compressed materials  
     compressed_dirt: { color: '#5C3D2E', rgb: [92, 61, 46], category: 'rock', hardness: 1.0 },
     packed_earth: { color: '#9B8B7B', rgb: [155, 139, 123], category: 'earth', hardness: 0.8 },
+    
+    // Special/Decorative blocks
+    glass: { color: '#B3E5FC', rgb: [179, 229, 252], category: 'decorative', hardness: 0.3 },
 };
 
 class LLMService {

@@ -100,14 +100,21 @@ const BLOCK_STONE = 'stone';
 const BLOCK_COLORS = {
     grass: 0x3cb043, // green
     dirt: 0x8B4513,  // brown
-    stone: 0x888888  // grey
+    stone: 0x888888, // grey
+    glass: 0xB3E5FC  // light blue
 };
 
 // Block material cache
 const BLOCK_MATERIALS = {
     grass: new THREE.MeshLambertMaterial({ color: BLOCK_COLORS.grass, side: THREE.DoubleSide }),
     dirt: new THREE.MeshLambertMaterial({ color: BLOCK_COLORS.dirt, side: THREE.DoubleSide }),
-    stone: new THREE.MeshLambertMaterial({ color: BLOCK_COLORS.stone, side: THREE.DoubleSide })
+    stone: new THREE.MeshLambertMaterial({ color: BLOCK_COLORS.stone, side: THREE.DoubleSide }),
+    glass: new THREE.MeshLambertMaterial({ 
+        color: BLOCK_COLORS.glass, 
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.2
+    })
 };
 
 function getStableColorFromType(type) {
@@ -338,13 +345,30 @@ function buildChunkMesh(chunkX, chunkZ) {
         return;
     }
 
-    // Collect geometries by material
-    const geometriesByType = new Map();
+    // Collect geometries by material and modifiers
+    // Group by (type + modifiers) so we can apply color/transparency modifiers
+    const geometriesByKey = new Map(); // key = "type:modifierSet" or just "type"
+    const blocksWithGeomMods = []; // Blocks with scale/rotation modifiers need individual meshes
 
     for (const [pos, visibleFaces] of data) {
         if (visibleFaces.length === 0) continue;
         const [x, y, z] = pos.split(',').map(Number);
         const type = blockTypes.get(pos) || BLOCK_DIRT;
+        
+        // Check if block has modifiers
+        const modifiers = typeof blockModifiers !== 'undefined' ? blockModifiers.get(pos) : [];
+        
+        // Check if modifiers include geometry-changing ones (scale, rotation)
+        const hasGeometryMods = modifiers && modifiers.some(m => 
+            m.startsWith('scale') || m.startsWith('rotate')
+        );
+        
+        if (hasGeometryMods) {
+            // Store for individual mesh creation
+            blocksWithGeomMods.push({ pos, type, modifiers, visibleFaces });
+            continue;
+        }
+        
         // Only render grass on the top face for grass blocks
         let faces = visibleFaces;
         if (type === BLOCK_GRASS) {
@@ -354,27 +378,156 @@ function buildChunkMesh(chunkX, chunkZ) {
         const geometry = createBlockGeometry(faces);
         if (!geometry || !geometry.attributes.position || geometry.attributes.position.count === 0) continue;
         geometry.translate(x, y, z);
-        if (!geometriesByType.has(type)) {
-            geometriesByType.set(type, []);
+        
+        // Create a key that includes modifier info for material selection
+        const modifierKey = modifiers && modifiers.length > 0 ? modifiers.sort().join(',') : '';
+        const groupKey = modifierKey ? `${type}:${modifierKey}` : type;
+        
+        if (!geometriesByKey.has(groupKey)) {
+            geometriesByKey.set(groupKey, { geoms: [], type, modifiers });
         }
-        geometriesByType.get(type).push(geometry);
+        geometriesByKey.get(groupKey).geoms.push(geometry);
     }
 
     const meshes = [];
-    for (const [type, geometries] of geometriesByType.entries()) {
-        if (geometries.length > 0) {
-            const mergedGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries(geometries, false);
-            const material = getMaterialForType(type);
+    
+    // Create merged meshes for blocks without geometry modifiers
+    for (const [groupKey, data] of geometriesByKey.entries()) {
+        if (data.geoms.length > 0) {
+            const mergedGeometry = THREE.BufferGeometryUtils.mergeBufferGeometries(data.geoms, false);
+            let material = getMaterialForType(data.type);
+            
+            // If block has color modifiers, create a modified material
+            if (data.modifiers && data.modifiers.length > 0) {
+                material = material.clone();
+                
+                // Apply color modifiers
+                const colorMods = data.modifiers.filter(m => m.startsWith('color'));
+                if (colorMods.length > 0) {
+                    const colorMap = {
+                        colorRed: 0xFF3333,
+                        colorGreen: 0x33FF33,
+                        colorBlue: 0x3333FF,
+                        colorYellow: 0xFFFF33,
+                        colorPurple: 0xFF33FF,
+                        colorGrey: 0x888888,
+                        colorBrown: 0x8B4513
+                    };
+                    material.color.setHex(colorMap[colorMods[0]] || 0xFFFFFF);
+                }
+                
+                // Apply transparency modifiers
+                if (data.modifiers.includes('transparent')) {
+                    material.transparent = true;
+                    material.opacity = 0.5;
+                }
+                if (data.modifiers.includes('veryTransparent')) {
+                    material.transparent = true;
+                    material.opacity = 0.2;
+                }
+                
+                // Apply glow modifiers
+                const glowMods = data.modifiers.filter(m => m.startsWith('glow'));
+                if (glowMods.length > 0) {
+                    const glowMap = {
+                        glowRed: 0xFF3333,
+                        glowGreen: 0x33FF33,
+                        glowBlue: 0x3333FF
+                    };
+                    material.emissive.setHex(glowMap[glowMods[0]] || 0x000000);
+                }
+            }
+            
             const mesh = new THREE.Mesh(mergedGeometry, material);
             mesh.castShadow = false;
             mesh.receiveShadow = true;
             mesh.visible = true;
-            // Store chunk position for culling
             mesh.userData.chunkX = chunkX;
             mesh.userData.chunkZ = chunkZ;
             scene.add(mesh);
             meshes.push(mesh);
         }
+    }
+    
+    // Create individual meshes for blocks with geometry modifiers (scale, rotation)
+    for (const blockData of blocksWithGeomMods) {
+        const { pos, type, modifiers, visibleFaces } = blockData;
+        const [x, y, z] = pos.split(',').map(Number);
+        
+        let faces = visibleFaces;
+        if (type === BLOCK_GRASS) {
+            faces = visibleFaces.filter(f => f !== 'top' ? f !== 'bottom' : true);
+            if (visibleFaces.includes('top')) faces = [...faces, 'top'];
+        }
+        
+        const geometry = createBlockGeometry(faces);
+        if (!geometry || !geometry.attributes.position || geometry.attributes.position.count === 0) continue;
+        
+        let material = getMaterialForType(type);
+        
+        // Apply color modifiers to individual mesh material
+        if (modifiers && modifiers.length > 0) {
+            material = material.clone();
+            
+            const colorMods = modifiers.filter(m => m.startsWith('color'));
+            if (colorMods.length > 0) {
+                const colorMap = {
+                    colorRed: 0xFF3333,
+                    colorGreen: 0x33FF33,
+                    colorBlue: 0x3333FF,
+                    colorYellow: 0xFFFF33,
+                    colorPurple: 0xFF33FF,
+                    colorGrey: 0x888888,
+                    colorBrown: 0x8B4513
+                };
+                material.color.setHex(colorMap[colorMods[0]] || 0xFFFFFF);
+            }
+            
+            if (modifiers.includes('transparent')) {
+                material.transparent = true;
+                material.opacity = 0.5;
+            }
+            if (modifiers.includes('veryTransparent')) {
+                material.transparent = true;
+                material.opacity = 0.2;
+            }
+            
+            const glowMods = modifiers.filter(m => m.startsWith('glow'));
+            if (glowMods.length > 0) {
+                const glowMap = {
+                    glowRed: 0xFF3333,
+                    glowGreen: 0x33FF33,
+                    glowBlue: 0x3333FF
+                };
+                material.emissive.setHex(glowMap[glowMods[0]] || 0x000000);
+            }
+        }
+        
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(x, y, z);
+        mesh.userData.chunkX = chunkX;
+        mesh.userData.chunkZ = chunkZ;
+        
+        // Apply scale modifiers
+        if (modifiers && modifiers.length > 0) {
+            if (modifiers.includes('scaleSmall')) mesh.scale.set(0.5, 0.5, 0.5);
+            if (modifiers.includes('scaleLarge')) mesh.scale.set(1.5, 1.5, 1.5);
+            if (modifiers.includes('scaleHuge')) mesh.scale.set(2, 2, 2);
+            
+            // Apply rotation modifiers
+            if (modifiers.includes('rotateX')) mesh.rotation.x = Math.PI / 4;
+            if (modifiers.includes('rotateY')) mesh.rotation.y = Math.PI / 4;
+            if (modifiers.includes('rotateZ')) mesh.rotation.z = Math.PI / 4;
+            
+            // Apply wireframe
+            if (modifiers.includes('wireframe')) material.wireframe = true;
+        }
+        
+        mesh.castShadow = false;
+        mesh.receiveShadow = true;
+        mesh.visible = true;
+        scene.add(mesh);
+        meshes.push(mesh);
     }
     chunkMeshes.set(key, meshes);
 }

@@ -78,12 +78,14 @@ const slot1Display = createBlockSlotDisplay(null);
 slot1Container.appendChild(slot1Display.container);
 slot1Container.style.display = 'inline-block';
 slot1Container.style.marginRight = '10px';
+slot1Container.style.position = 'relative';
 
 const slot2Container = document.createElement('div');
 const slot2Display = createBlockSlotDisplay(null);
 slot2Container.appendChild(slot2Display.container);
 slot2Container.style.display = 'inline-block';
 slot2Container.style.marginLeft = '10px';
+slot2Container.style.position = 'relative';
 
 craftingOverlay.appendChild(slot1Container);
 craftingOverlay.appendChild(document.createTextNode(' + '));
@@ -97,6 +99,7 @@ function resetCraftingSlot(display) {
 
 function setCraftingSlot(slotNumber, blockType, slotIndex) {
     const display = slotNumber === 1 ? slot1Display : slot2Display;
+    const container = slotNumber === 1 ? slot1Container : slot2Container;
     const metadata = blockType && window.BLOCK_METADATA ? window.BLOCK_METADATA[blockType] : null;
 
     if (slotNumber === 1) {
@@ -111,9 +114,80 @@ function setCraftingSlot(slotNumber, blockType, slotIndex) {
         display.label.innerText = blockType.split('_').join('\n');
         display.label.style.color = '#ccc';
         display.colorBox.style.backgroundColor = metadata ? metadata.color : '#CCCCCC';
+        
+        // Add modifier tooltip
+        let tooltip = container.querySelector('[data-is-modifier-tooltip]');
+        if (tooltip) {
+            tooltip.remove();
+        }
+
+        tooltip = document.createElement('div');
+        tooltip.setAttribute('data-is-modifier-tooltip', 'true');
+        tooltip.style.position = 'fixed';
+        tooltip.style.display = 'none';
+        tooltip.style.zIndex = '9999';
+        tooltip.style.backgroundColor = 'rgba(0, 0, 0, 0.95)';
+        tooltip.style.border = '2px solid #00FF00';
+        tooltip.style.color = '#00FF00';
+        tooltip.style.padding = '8px 12px';
+        tooltip.style.borderRadius = '6px';
+        tooltip.style.fontSize = '11px';
+        tooltip.style.fontFamily = 'monospace';
+        tooltip.style.maxWidth = '200px';
+        tooltip.style.wordWrap = 'break-word';
+        tooltip.style.pointerEvents = 'none';
+        tooltip.style.boxShadow = '0 0 15px rgba(0, 255, 0, 0.3)';
+        tooltip.innerHTML = `<strong>${blockType}</strong><br><em>Loading modifiers...</em>`;
+        document.body.appendChild(tooltip);
+
+        // Get and display modifiers
+        const loadModifiers = async () => {
+            try {
+                let modifiers = [];
+                if (typeof window.getModifiersForBlockLLM === 'function') {
+                    modifiers = await window.getModifiersForBlockLLM(blockType);
+                } else if (typeof window.getModifiersForBlock === 'function') {
+                    modifiers = window.getModifiersForBlock(blockType);
+                }
+                
+                if (modifiers.length === 0) {
+                    tooltip.innerHTML = `<strong>${blockType}</strong><br><em>No modifiers</em>`;
+                } else {
+                    const modifierNames = modifiers
+                        .map(key => {
+                            const mod = window.MODIFIERS ? window.MODIFIERS[key] : null;
+                            return mod ? `• ${mod.name}` : `• ${key}`;
+                        })
+                        .join('<br>');
+                    tooltip.innerHTML = `<strong>${blockType}</strong><br>${modifierNames}`;
+                }
+            } catch (error) {
+                tooltip.innerHTML = `<strong>${blockType}</strong><br><em>Error loading modifiers</em>`;
+                console.error('[Crafting] Error loading modifiers:', error);
+            }
+        };
+
+        container.addEventListener('mouseenter', () => {
+            loadModifiers();
+            const rect = container.getBoundingClientRect();
+            tooltip.style.display = 'block';
+            tooltip.style.left = (rect.right + 8) + 'px';
+            tooltip.style.top = (rect.top) + 'px';
+        });
+
+        container.addEventListener('mouseleave', () => {
+            tooltip.style.display = 'none';
+        });
     } else {
         if (slotNumber === 1) selectedSlot1Index = null;
         if (slotNumber === 2) selectedSlot2Index = null;
+        
+        // Remove tooltip if it exists
+        const tooltip = container.querySelector('[data-is-modifier-tooltip]');
+        if (tooltip) {
+            tooltip.remove();
+        }
+        
         resetCraftingSlot(display);
     }
 }
@@ -241,6 +315,7 @@ function renderCraftingInventoryGrid() {
         item.style.fontSize = '10px';
         item.style.color = 'white';
         item.style.userSelect = 'none';
+        item.style.position = 'relative';
 
         if (slot && slot.type) {
             const metadata = window.BLOCK_METADATA ? window.BLOCK_METADATA[slot.type] : null;
@@ -265,9 +340,68 @@ function renderCraftingInventoryGrid() {
             count.style.fontWeight = 'bold';
             item.appendChild(count);
 
+            // Add modifier tooltip on hover
+            const tooltip = document.createElement('div');
+            tooltip.style.position = 'fixed';
+            tooltip.style.display = 'none';
+            tooltip.style.zIndex = '9999';
+            tooltip.style.backgroundColor = 'rgba(0, 0, 0, 0.95)';
+            tooltip.style.border = '2px solid #00FF00';
+            tooltip.style.color = '#00FF00';
+            tooltip.style.padding = '8px 12px';
+            tooltip.style.borderRadius = '6px';
+            tooltip.style.fontSize = '11px';
+            tooltip.style.fontFamily = 'monospace';
+            tooltip.style.maxWidth = '200px';
+            tooltip.style.wordWrap = 'break-word';
+            tooltip.style.pointerEvents = 'none';
+            tooltip.style.boxShadow = '0 0 15px rgba(0, 255, 0, 0.3)';
+            tooltip.innerHTML = `<strong>${slot.type}</strong><br><em>Loading modifiers...</em>`;
+            document.body.appendChild(tooltip);
+
+            // Get and display modifiers
+            const loadModifiers = async () => {
+                try {
+                    let modifiers = [];
+                    if (typeof window.getModifiersForBlockLLM === 'function') {
+                        modifiers = await window.getModifiersForBlockLLM(slot.type);
+                    } else if (typeof window.getModifiersForBlock === 'function') {
+                        modifiers = window.getModifiersForBlock(slot.type);
+                    }
+                    
+                    if (modifiers.length === 0) {
+                        tooltip.innerHTML = `<strong>${slot.type}</strong><br><em>No modifiers</em>`;
+                    } else {
+                        const modifierNames = modifiers
+                            .map(key => {
+                                const mod = window.MODIFIERS ? window.MODIFIERS[key] : null;
+                                return mod ? `• ${mod.name}` : `• ${key}`;
+                            })
+                            .join('<br>');
+                        tooltip.innerHTML = `<strong>${slot.type}</strong><br>${modifierNames}`;
+                    }
+                } catch (error) {
+                    tooltip.innerHTML = `<strong>${slot.type}</strong><br><em>Error loading modifiers</em>`;
+                    console.error('[Crafting Inventory] Error loading modifiers:', error);
+                }
+            };
+
+            item.addEventListener('mouseenter', () => {
+                loadModifiers();
+                const rect = item.getBoundingClientRect();
+                tooltip.style.display = 'block';
+                tooltip.style.left = (rect.right + 8) + 'px';
+                tooltip.style.top = (rect.top) + 'px';
+            });
+
+            item.addEventListener('mouseleave', () => {
+                tooltip.style.display = 'none';
+            });
+
             item.draggable = true;
             item.style.cursor = 'grab';
             item.addEventListener('dragstart', (event) => {
+                tooltip.style.display = 'none';  // Hide tooltip during drag
                 if (!event.dataTransfer) return;
                 event.dataTransfer.setData('text/plain', String(index));
                 event.dataTransfer.effectAllowed = 'copy';
@@ -538,6 +672,7 @@ function createInventorySlotElement(slot, index, selectedSlotIndex) {
     slotElement.style.color = 'white';
     slotElement.style.cursor = 'pointer';
     slotElement.style.fontFamily = 'inherit';
+    slotElement.style.position = 'relative';
 
     const slotIndexLabel = document.createElement('div');
     slotIndexLabel.textContent = index < 9 ? String(index + 1) : String(index + 1);
@@ -560,6 +695,74 @@ function createInventorySlotElement(slot, index, selectedSlotIndex) {
     itemCount.style.fontWeight = 'bold';
     itemCount.style.alignSelf = 'flex-end';
     slotElement.appendChild(itemCount);
+
+    // Add modifier tooltip on hover
+    if (slot && slot.type) {
+        const tooltip = document.createElement('div');
+        tooltip.style.position = 'fixed';
+        tooltip.style.display = 'none';
+        tooltip.style.zIndex = '9999';
+        tooltip.style.backgroundColor = 'rgba(0, 0, 0, 0.95)';
+        tooltip.style.border = '2px solid #00FF00';
+        tooltip.style.color = '#00FF00';
+        tooltip.style.padding = '8px 12px';
+        tooltip.style.borderRadius = '6px';
+        tooltip.style.fontSize = '11px';
+        tooltip.style.fontFamily = 'monospace';
+        tooltip.style.maxWidth = '200px';
+        tooltip.style.wordWrap = 'break-word';
+        tooltip.style.pointerEvents = 'none';
+        tooltip.style.boxShadow = '0 0 15px rgba(0, 255, 0, 0.3)';
+        tooltip.innerHTML = `<strong>${slot.type}</strong><br><em>Loading modifiers...</em>`;
+        document.body.appendChild(tooltip);
+
+        // Get and display modifiers
+        const loadModifiers = async () => {
+            try {
+                // Try LLM first, fall back to sync version
+                let modifiers = [];
+                if (typeof window.getModifiersForBlockLLM === 'function') {
+                    modifiers = await window.getModifiersForBlockLLM(slot.type);
+                } else if (typeof window.getModifiersForBlock === 'function') {
+                    modifiers = window.getModifiersForBlock(slot.type);
+                }
+                
+                if (modifiers.length === 0) {
+                    tooltip.innerHTML = `<strong>${slot.type}</strong><br><em>No modifiers</em>`;
+                } else {
+                    const modifierNames = modifiers
+                        .map(key => {
+                            const mod = window.MODIFIERS ? window.MODIFIERS[key] : null;
+                            return mod ? `• ${mod.name}` : `• ${key}`;
+                        })
+                        .join('<br>');
+                    tooltip.innerHTML = `<strong>${slot.type}</strong><br>${modifierNames}`;
+                }
+            } catch (error) {
+                tooltip.innerHTML = `<strong>${slot.type}</strong><br><em>Error loading modifiers</em>`;
+                console.error('[Inventory] Error loading modifiers:', error);
+            }
+        };
+
+        slotElement.addEventListener('mouseenter', () => {
+            loadModifiers();
+            const rect = slotElement.getBoundingClientRect();
+            tooltip.style.display = 'block';
+            tooltip.style.left = (rect.right + 8) + 'px';
+            tooltip.style.top = (rect.top) + 'px';
+        });
+
+        slotElement.addEventListener('mouseleave', () => {
+            tooltip.style.display = 'none';
+        });
+
+        // Clean up tooltip when element is removed
+        slotElement.addEventListener('DOMNodeRemoved', () => {
+            if (tooltip.parentNode) {
+                tooltip.parentNode.removeChild(tooltip);
+            }
+        });
+    }
 
     slotElement.addEventListener('click', () => {
         if (typeof window.selectInventorySlot === 'function') {

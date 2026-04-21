@@ -46,13 +46,13 @@ HTTP_PID=$!
 
 # Wait briefly for HTTP server.
 for _ in {1..20}; do
-  if curl -fsS "http://127.0.0.1:${HTTP_PORT}/base.html" >/dev/null 2>&1; then
+  if curl -fsS "http://127.0.0.1:${HTTP_PORT}/index.html" >/dev/null 2>&1; then
     break
   fi
   sleep 0.25
 done
 
-if ! curl -fsS "http://127.0.0.1:${HTTP_PORT}/base.html" >/dev/null 2>&1; then
+if ! curl -fsS "http://127.0.0.1:${HTTP_PORT}/index.html" >/dev/null 2>&1; then
   echo "[quickrun] ERROR: Python server failed to start. Last logs:"
   tail -n 40 "${HTTP_LOG}" || true
   exit 1
@@ -62,6 +62,6 @@ echo ""
 echo "[quickrun] READY"
 echo "[quickrun] Ollama PID: ${OLLAMA_PID}"
 echo "[quickrun] HTTP PID:   ${HTTP_PID}"
-echo "[quickrun] Game URL:   http://localhost:${HTTP_PORT}/base.html"
+echo "[quickrun] Game URL:   http://localhost:${HTTP_PORT}/index.html"
 echo "[quickrun] Ollama:     http://${OLLAMA_HOST}/api/version"
 echo "[quickrun] Logs:       ${OLLAMA_LOG} and ${HTTP_LOG}"

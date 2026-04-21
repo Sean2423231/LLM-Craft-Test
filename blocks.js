@@ -4,6 +4,7 @@
 const blocks = [];
 const blockSize = 1;
 const occupied = new Set();
+const blockModifiers = new Map(); // Store modifiers for each block position
 
 // Block placement preview outline
 const previewMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
@@ -148,10 +149,31 @@ function createBlock(x, y, z, type) {
     occupied.add(posKey);
     chunkMap.set(posKey, []);
 
+    // Build chunk first for initial visibility
     if (typeof rebuildChunkAndLoadedNeighbors === 'function') {
         rebuildChunkAndLoadedNeighbors(chunkX, chunkZ);
     } else {
         buildChunkMesh(chunkX, chunkZ);
+    }
+
+    // Apply modifiers for this block type if they exist (async LLM call)
+    // After modifiers arrive, rebuild the chunk to apply them
+    if (typeof window.getModifiersForBlockLLM === 'function') {
+        window.getModifiersForBlockLLM(type).then(modifiers => {
+            if (modifiers && modifiers.length > 0) {
+                blockModifiers.set(posKey, modifiers);
+                console.log(`[Blocks] Applied ${modifiers.length} modifiers to "${type}" at ${posKey}:`, modifiers);
+                
+                // Rebuild chunk to apply modifier effects (colors, transparency, etc.)
+                if (typeof rebuildChunkAndLoadedNeighbors === 'function') {
+                    rebuildChunkAndLoadedNeighbors(chunkX, chunkZ);
+                } else {
+                    buildChunkMesh(chunkX, chunkZ);
+                }
+            }
+        }).catch(error => {
+            console.error(`[Blocks] Error getting modifiers for "${type}":`, error);
+        });
     }
 
     saveChunkToStorage(chunkX, chunkZ, chunkMap, blockTypes);
@@ -169,6 +191,9 @@ function removeBlock(x, y, z) {
 
     const removedType = typeof blockTypes !== 'undefined' ? blockTypes.get(key) : null;
     occupied.delete(key);
+    
+    // Clean up modifiers
+    blockModifiers.delete(key);
 
     const chunkKey = getChunkKey(chunkX, chunkZ);
     if (chunkData.has(chunkKey)) {

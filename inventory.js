@@ -6,6 +6,7 @@ const inventorySlots = Array.from({ length: inventorySlotCount }, () => null);
 inventorySlots[0] = { type: 'grass', count: 999 };
 inventorySlots[1] = { type: 'dirt', count: 999 };
 inventorySlots[2] = { type: 'stone', count: 999 };
+inventorySlots[3] = { type: 'glass', count: 999 };
 
 let selectedSlotIndex = 0;
 let inventoryOpen = false;
